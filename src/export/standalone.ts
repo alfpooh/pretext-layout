@@ -8,18 +8,15 @@
  * as data URLs so the file is portable; only the web-font link points outward.
  */
 
-import type { AnalyzedLayer, LayoutConfig, PlacedFragment } from '../types'
-
-export interface ExportTitle {
-  eyebrow: string
-  heading: string
-  standfirst: string
-}
+import type { AnalyzedLayer, LayoutConfig, PlacedFragment, RuleLine } from '../types'
+import type { Theme } from '../data/sampleLayers'
+import { captureVideoFrame } from '../layout/alpha'
 
 export interface ExportParams {
   layers: AnalyzedLayer[]
   fragments: PlacedFragment[]
-  title: ExportTitle
+  rules: RuleLine[]
+  theme: Theme
   config: LayoutConfig
   column: { left: number; top: number; bottom: number }
   stageWidth: number
@@ -33,6 +30,8 @@ function escapeHtml(s: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
 }
+
+const MONO_FAMILY = 'ui-monospace, "SFMono-Regular", Menlo, monospace'
 
 /** Fetch a same-origin asset and return it as a base64 data URL. */
 export async function fetchAsDataUrl(url: string): Promise<string> {
@@ -49,7 +48,7 @@ export async function fetchAsDataUrl(url: string): Promise<string> {
 
 /** Build the standalone HTML string. `imageData` maps layer id → data URL. */
 export function buildStandaloneHtml(params: ExportParams, imageData: Record<string, string>): string {
-  const { layers, fragments, title, config, column, stageWidth, stageHeight } = params
+  const { layers, fragments, rules, theme, stageWidth, stageHeight } = params
 
   const layerEls = layers
     .map((l) => {
@@ -59,14 +58,31 @@ export function buildStandaloneHtml(params: ExportParams, imageData: Record<stri
     })
     .join('\n')
 
-  const fragmentEls = fragments
+  const ruleEls = rules
     .map(
-      (f) =>
-        `      <span class="frag" style="left:${f.x}px;top:${f.y}px">${escapeHtml(f.text)}</span>`,
+      (r) =>
+        `      <div class="rule" style="left:${r.x}px;top:${r.y}px;width:${r.width}px;background:${theme.text}"></div>`,
     )
     .join('\n')
 
-  const headingHtml = escapeHtml(title.heading).replace(/\n/g, '<br/>')
+  const fragmentEls = fragments
+    .map((f) => {
+      const s = f.style
+      const css = [
+        `left:${f.x}px`,
+        `top:${f.y}px`,
+        `font-size:${s.fontSize}px`,
+        `font-weight:${s.weight}`,
+        `font-style:${s.italic ? 'italic' : 'normal'}`,
+        s.mono ? `font-family:${MONO_FAMILY}` : '',
+        `color:${theme.text}`,
+        s.muted ? 'opacity:.62' : '',
+      ]
+        .filter(Boolean)
+        .join(';')
+      return `      <span class="frag" style="${css}">${escapeHtml(f.text)}</span>`
+    })
+    .join('\n')
 
   return `<!DOCTYPE html>
 <html lang="ko">
@@ -79,29 +95,22 @@ export function buildStandaloneHtml(params: ExportParams, imageData: Record<stri
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;500;700;900&family=Noto+Sans+KR:wght@400;600;700;800&display=swap" rel="stylesheet" />
 <style>
   * { box-sizing: border-box; }
-  body { margin: 0; background: #dbd6ce; display: flex; justify-content: center; padding: 32px; }
+  body { margin: 0; background: #cdc7bd; display: flex; justify-content: center; padding: 32px; }
   .stage {
     position: relative;
     width: ${stageWidth}px;
     height: ${stageHeight}px;
     overflow: hidden;
-    background: radial-gradient(circle at 28% 8%, rgba(255,255,255,.96), rgba(255,255,255,0) 31%),
-                linear-gradient(135deg,#fffaf0 0%,#f0e7da 48%,#ebe0d0 100%);
+    background: ${theme.background};
     border: 1px solid rgba(50,40,30,.14);
     box-shadow: 0 18px 52px rgba(24,19,14,.18);
   }
   .layer { position: absolute; height: auto; filter: drop-shadow(0 26px 28px rgba(20,18,15,.23)); user-select: none; }
-  .title { position: absolute; left: ${column.left}px; top: 54px; width: ${config.layoutWidth}px; }
-  .title .eyebrow { font-family: "Noto Sans KR", sans-serif; font-size: 12px; letter-spacing: .22em; text-transform: uppercase; font-weight: 900; color: #dc3d32; }
-  .title h2 { font-family: "Noto Serif KR", serif; font-size: 66px; line-height: .96; letter-spacing: -.07em; margin: 12px 0 10px; color: #15120f; }
-  .title p { font-family: "Noto Sans KR", sans-serif; font-size: 14px; line-height: 1.65; color: #5c554d; max-width: 520px; margin: 0; }
+  .rule { position: absolute; height: 1px; opacity: .28; }
   .frag {
     position: absolute;
     white-space: pre;
-    color: rgba(18,16,14,.92);
     font-family: "Noto Serif KR", serif;
-    font-size: ${config.fontSize}px;
-    font-weight: 500;
     line-height: 1;
     letter-spacing: -.01em;
     text-rendering: geometricPrecision;
@@ -110,12 +119,8 @@ export function buildStandaloneHtml(params: ExportParams, imageData: Record<stri
 </head>
 <body>
   <section class="stage">
-    <div class="title">
-      <div class="eyebrow">${escapeHtml(title.eyebrow)}</div>
-      <h2>${headingHtml}</h2>
-      <p>${escapeHtml(title.standfirst)}</p>
-    </div>
 ${layerEls}
+${ruleEls}
 ${fragmentEls}
   </section>
 </body>
@@ -129,7 +134,14 @@ export async function exportStandaloneHtml(params: ExportParams): Promise<void> 
   await Promise.all(
     params.layers.map(async (l) => {
       try {
-        imageData[l.id] = await fetchAsDataUrl(l.src)
+        if (l.kind === 'video') {
+          // Export is a static deliverable: bake the video's silhouette frame to
+          // a transparent PNG so the file stays self-contained and JS-free.
+          const { canvas } = await captureVideoFrame(l.src)
+          imageData[l.id] = canvas.toDataURL('image/png')
+        } else {
+          imageData[l.id] = await fetchAsDataUrl(l.src)
+        }
       } catch {
         // Fall back to the original URL reference if inlining fails.
         imageData[l.id] = l.src
