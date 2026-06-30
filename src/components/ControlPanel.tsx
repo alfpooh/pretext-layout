@@ -1,11 +1,12 @@
 /**
- * ControlPanel — text input, image-layer management, layout sliders, toggles and
- * export action. Purely controlled: it renders state passed from App and reports
- * changes up.
+ * ControlPanel — Markdown text input, image/video layer management, color
+ * theme, layout sliders, toggles and export. Purely controlled: it renders
+ * state passed from App and reports changes up.
  */
 
 import { useRef } from 'react'
 import type { LayerSource, LayoutConfig, LayoutResult } from '../types'
+import type { Theme } from '../data/sampleLayers'
 
 interface SliderDef {
   key: keyof LayoutConfig
@@ -27,10 +28,10 @@ const SLIDERS: SliderDef[] = [
 interface ControlPanelProps {
   config: LayoutConfig
   onConfigChange: (next: Partial<LayoutConfig>) => void
+  theme: Theme
+  onThemeChange: (next: Partial<Theme>) => void
   text: string
   onTextChange: (next: string) => void
-  keepAll: boolean
-  onKeepAllChange: (next: boolean) => void
   showDebug: boolean
   onShowDebugChange: (next: boolean) => void
   showLabels: boolean
@@ -46,17 +47,16 @@ interface ControlPanelProps {
   layerCount: number
   loading: boolean
   error: string | null
-  originalImage: string
 }
 
 export function ControlPanel(props: ControlPanelProps) {
   const {
     config,
     onConfigChange,
+    theme,
+    onThemeChange,
     text,
     onTextChange,
-    keepAll,
-    onKeepAllChange,
     showDebug,
     onShowDebugChange,
     showLabels,
@@ -72,22 +72,22 @@ export function ControlPanel(props: ControlPanelProps) {
     layerCount,
     loading,
     error,
-    originalImage,
   } = props
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   return (
     <aside className="panel">
-      <h3>이미지 레이어</h3>
+      <h3>이미지 · 비디오 레이어</h3>
       <p>
-        투명 PNG를 업로드하면 분리된 요소 레이어로 추가됩니다. 스테이지에서 직접 드래그해 배치를
-        바꾸면 본문이 즉시 다시 흐릅니다. 자동 분리는 SAM 계열 백엔드 연결 지점만 마련해 두었습니다.
+        투명 PNG 또는 투명 배경 WebM을 업로드하면 분리된 요소 레이어로 추가됩니다. WebM은 알파를
+        보존하는 live canvas로 렌더링되고, 초당 한 번 프레임을 떠 실루엣을 다시 분석합니다. 스테이지에서
+        직접 드래그해 배치를 바꾸면 본문이 즉시 다시 흐릅니다.
       </p>
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/png,image/webp,image/*"
+        accept="image/png,image/webp,image/*,video/webm,video/*"
         multiple
         hidden
         onChange={(e) => {
@@ -97,7 +97,7 @@ export function ControlPanel(props: ControlPanelProps) {
       />
       <div className="controls">
         <button className="primary" onClick={() => fileInputRef.current?.click()}>
-          이미지 업로드
+          미디어 업로드
         </button>
         <button className="secondary" onClick={onResetLayers}>
           샘플 레이어로
@@ -107,8 +107,13 @@ export function ControlPanel(props: ControlPanelProps) {
       <ul className="layer-list">
         {sources.map((s) => (
           <li key={s.id} className="layer-item">
-            <img src={s.src} alt="" className="layer-thumb" />
+            {s.kind === 'video' ? (
+              <video src={s.src} className="layer-thumb" muted playsInline />
+            ) : (
+              <img src={s.src} alt="" className="layer-thumb" />
+            )}
             <span className="layer-name" title={s.label}>
+              {s.kind === 'video' ? '🎬 ' : ''}
               {s.label}
             </span>
             <span className="layer-pos">
@@ -126,13 +131,38 @@ export function ControlPanel(props: ControlPanelProps) {
         {sources.length === 0 && <li className="layer-empty">레이어가 없습니다. 이미지를 업로드하세요.</li>}
       </ul>
 
-      <h3 className="section-gap">입력 텍스트</h3>
+      <h3 className="section-gap">본문 텍스트 (Markdown)</h3>
+      <p className="hint">
+        <code># 제목</code> · <code>- 목록</code> · <code>&gt; 인용</code> · <code>**굵게**</code> ·{' '}
+        <code>*기울임*</code> · <code>`코드`</code> · <code>---</code> 지원
+      </p>
       <textarea
         value={text}
         onChange={(e) => onTextChange(e.target.value)}
         spellCheck={false}
-        aria-label="본문 텍스트"
+        aria-label="본문 마크다운 텍스트"
       />
+
+      <div className="colors">
+        <label className="color-field">
+          <span>배경색</span>
+          <input
+            type="color"
+            value={theme.background}
+            onChange={(e) => onThemeChange({ background: e.target.value })}
+          />
+          <code>{theme.background}</code>
+        </label>
+        <label className="color-field">
+          <span>글자색</span>
+          <input
+            type="color"
+            value={theme.text}
+            onChange={(e) => onThemeChange({ text: e.target.value })}
+          />
+          <code>{theme.text}</code>
+        </label>
+      </div>
 
       <div className="sliders">
         {SLIDERS.map((s) => (
@@ -165,15 +195,11 @@ export function ControlPanel(props: ControlPanelProps) {
           <input type="checkbox" checked={showLabels} onChange={(e) => onShowLabelsChange(e.target.checked)} />
           레이어 라벨
         </label>
-        <label>
-          <input type="checkbox" checked={keepAll} onChange={(e) => onKeepAllChange(e.target.checked)} />
-          CJK 단어 유지 (keep-all)
-        </label>
       </div>
 
       <div className="controls">
         <button className="secondary" onClick={onResetSample}>
-          샘플 텍스트 복원
+          샘플로 복원
         </button>
         <button className="primary" onClick={onExport} disabled={exporting || loading}>
           {exporting ? '내보내는 중…' : 'HTML 내보내기'}
@@ -195,12 +221,7 @@ export function ControlPanel(props: ControlPanelProps) {
 
       <div className="meta">
         <strong>처리 구조</strong>
-        <code>separated PNG → alpha scan → line regions → pretext measure → static fragments</code>
-      </div>
-
-      <div className="original">
-        <img src={originalImage} alt="original uploaded image" />
-        <span>원본 이미지 (분리 전)</span>
+        <code>transparent media → alpha scan → line regions → pretext rich-inline → static fragments</code>
       </div>
     </aside>
   )

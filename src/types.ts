@@ -9,12 +9,14 @@
  *    survives resizing of the layer.
  */
 
-/** A transparent PNG element placed on the stage. */
+/** A transparent PNG image or transparent WebM video element placed on the stage. */
 export interface LayerSource {
   id: string
   /** Human-readable label shown in the debug overlay / export. */
   label: string
-  /** URL of the transparent PNG (relative to the app base). */
+  /** Media kind. Defaults to 'image' when omitted. */
+  kind?: 'image' | 'video'
+  /** URL of the transparent PNG or WebM. */
   src: string
   /** Left edge in stage space, px. */
   x: number
@@ -63,6 +65,20 @@ export interface LayoutConfig {
 /** A closed horizontal interval [left, right] in stage space. */
 export type Interval = [number, number]
 
+/** Visual style of a placed fragment, derived from markdown structure. */
+export interface FragmentStyle {
+  /** Font size in px (headings are larger than body). */
+  fontSize: number
+  /** Numeric font weight (e.g. 500 body, 700 bold/heading). */
+  weight: number
+  /** Render in italic (emphasis, blockquote). */
+  italic: boolean
+  /** Render in a monospace family (inline `code`). */
+  mono: boolean
+  /** Render dimmed (blockquote / secondary text). */
+  muted: boolean
+}
+
 /** One positioned line fragment produced by the flow engine. */
 export interface PlacedFragment {
   text: string
@@ -70,10 +86,10 @@ export interface PlacedFragment {
   x: number
   /** Baseline-independent top edge in stage space, px. */
   y: number
-  /** Width of the column slot this fragment was flowed into, px. */
-  slotWidth: number
-  /** Measured width of the text itself, px. */
-  textWidth: number
+  /** The line-height of the row this fragment sits on, px. */
+  lineHeight: number
+  /** Visual style for this fragment. */
+  style: FragmentStyle
 }
 
 /** A debug rectangle marking an occupied (obstacle) band on one text line. */
@@ -84,10 +100,19 @@ export interface ObstacleRect {
   height: number
 }
 
+/** A horizontal rule (markdown `---`) positioned in stage space. */
+export interface RuleLine {
+  x: number
+  y: number
+  width: number
+}
+
 /** Full result of a layout pass. */
 export interface LayoutResult {
   fragments: PlacedFragment[]
   obstacles: ObstacleRect[]
+  /** Horizontal rules from markdown `---`. */
+  rules: RuleLine[]
   /** True if the text overflowed the available vertical space. */
   overflowed: boolean
   /** Number of source characters that were laid out. */

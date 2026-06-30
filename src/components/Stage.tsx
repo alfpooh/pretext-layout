@@ -11,7 +11,9 @@
 
 import { forwardRef, useRef } from 'react'
 import type { AnalyzedLayer, LayoutConfig, LayoutResult } from '../types'
+import type { Theme } from '../data/sampleLayers'
 import { COLUMN } from '../data/sampleLayers'
+import { VideoLayer } from './VideoLayer'
 
 interface StageProps {
   width: number
@@ -19,9 +21,10 @@ interface StageProps {
   layers: AnalyzedLayer[]
   result: LayoutResult
   config: LayoutConfig
-  title: { eyebrow: string; heading: string; standfirst: string }
+  theme: Theme
   showDebug: boolean
   showLabels: boolean
+  videos: Record<string, HTMLVideoElement>
   onLayerMove: (id: string, x: number, y: number) => void
 }
 
@@ -37,12 +40,12 @@ interface DragState {
 }
 
 export const Stage = forwardRef<HTMLDivElement, StageProps>(function Stage(
-  { width, height, layers, result, config, title, showDebug, showLabels, onLayerMove },
+  { width, height, layers, result, config, theme, showDebug, showLabels, videos, onLayerMove },
   ref,
 ) {
   const drag = useRef<DragState | null>(null)
 
-  function handlePointerDown(e: React.PointerEvent<HTMLImageElement>, layer: AnalyzedLayer) {
+  function handlePointerDown(e: React.PointerEvent<HTMLElement>, layer: AnalyzedLayer) {
     e.preventDefault()
     try {
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
@@ -60,7 +63,7 @@ export const Stage = forwardRef<HTMLDivElement, StageProps>(function Stage(
     }
   }
 
-  function handlePointerMove(e: React.PointerEvent<HTMLImageElement>) {
+  function handlePointerMove(e: React.PointerEvent<HTMLElement>) {
     const d = drag.current
     if (!d || d.id !== layerIdOf(e)) return
     d.pending = {
@@ -77,7 +80,7 @@ export const Stage = forwardRef<HTMLDivElement, StageProps>(function Stage(
     }
   }
 
-  function handlePointerUp(e: React.PointerEvent<HTMLImageElement>) {
+  function handlePointerUp(e: React.PointerEvent<HTMLElement>) {
     const d = drag.current
     if (!d) return
     if (d.frame !== null) cancelAnimationFrame(d.frame)
@@ -94,23 +97,10 @@ export const Stage = forwardRef<HTMLDivElement, StageProps>(function Stage(
     <section
       className="stage"
       ref={ref}
-      style={{ width, height }}
+      style={{ width, height, background: theme.background }}
       aria-label="Editorial layout stage"
     >
       <div className="stage-grid" style={{ left: COLUMN.left, top: COLUMN.top, width: config.layoutWidth }} />
-
-      <div className="title-block" style={{ left: COLUMN.left, width: config.layoutWidth }}>
-        <div className="eyebrow">{title.eyebrow}</div>
-        <h2>
-          {title.heading.split('\n').map((line, i, arr) => (
-            <span key={i}>
-              {line}
-              {i < arr.length - 1 ? <br /> : null}
-            </span>
-          ))}
-        </h2>
-        <p>{title.standfirst}</p>
-      </div>
 
       {showDebug &&
         result.obstacles.map((o, i) => (
@@ -121,27 +111,56 @@ export const Stage = forwardRef<HTMLDivElement, StageProps>(function Stage(
           />
         ))}
 
-      {layers.map((layer) => (
-        <img
-          key={layer.id}
-          className="layer"
-          data-layer-id={layer.id}
-          src={layer.src}
-          alt={layer.label}
-          draggable={false}
-          onPointerDown={(e) => handlePointerDown(e, layer)}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          style={{ left: layer.x, top: layer.y, width: layer.width, zIndex: layer.z ?? 3 }}
+      {result.rules.map((r, i) => (
+        <div
+          key={`rule-${i}`}
+          className="rule-line"
+          style={{ left: r.x, top: r.y, width: r.width, background: theme.text, opacity: 0.28 }}
         />
       ))}
+
+      {layers.map((layer) =>
+        layer.kind === 'video' ? (
+          <VideoLayer
+            key={layer.id}
+            layer={layer}
+            video={videos[layer.id]}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+          />
+        ) : (
+          <img
+            key={layer.id}
+            className="layer"
+            data-layer-id={layer.id}
+            src={layer.src}
+            alt={layer.label}
+            draggable={false}
+            onPointerDown={(e) => handlePointerDown(e, layer)}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            style={{ left: layer.x, top: layer.y, width: layer.width, zIndex: layer.z ?? 3 }}
+          />
+        ),
+      )}
 
       {result.fragments.map((f, i) => (
         <span
           key={i}
           className="frag"
-          style={{ left: f.x, top: f.y, fontSize: config.fontSize, lineHeight: 1 }}
+          style={{
+            left: f.x,
+            top: f.y,
+            fontSize: f.style.fontSize,
+            fontWeight: f.style.weight,
+            fontStyle: f.style.italic ? 'italic' : 'normal',
+            fontFamily: f.style.mono ? 'ui-monospace, "SFMono-Regular", Menlo, monospace' : undefined,
+            lineHeight: 1,
+            color: theme.text,
+            opacity: f.style.muted ? 0.62 : 1,
+          }}
         >
           {f.text}
         </span>
@@ -166,6 +185,6 @@ export const Stage = forwardRef<HTMLDivElement, StageProps>(function Stage(
 })
 
 /** Read the layer id off the element currently receiving a pointer event. */
-function layerIdOf(e: React.PointerEvent<HTMLImageElement>): string {
+function layerIdOf(e: React.PointerEvent<HTMLElement>): string {
   return e.currentTarget.dataset.layerId ?? ''
 }

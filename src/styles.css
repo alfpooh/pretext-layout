@@ -108,35 +108,16 @@ body {
   z-index: 0;
   pointer-events: none;
 }
-.title-block {
+.rule-line {
   position: absolute;
-  top: 54px;
-  z-index: 6;
-}
-.title-block .eyebrow {
-  font-size: 12px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  font-weight: 900;
-  color: var(--accent);
-}
-.title-block h2 {
-  font-family: 'Noto Serif KR', serif;
-  font-size: 66px;
-  line-height: 0.96;
-  letter-spacing: -0.07em;
-  margin: 12px 0 10px;
-}
-.title-block p {
-  font-size: 14px;
-  line-height: 1.65;
-  color: #5c554d;
-  max-width: 520px;
-  margin: 0;
+  height: 1px;
+  z-index: 5;
+  pointer-events: none;
 }
 .layer {
   position: absolute;
   height: auto;
+  display: block;
   filter: drop-shadow(0 26px 28px rgba(20, 18, 15, 0.23));
   user-select: none;
   cursor: grab;
@@ -167,9 +148,7 @@ body {
 .frag {
   position: absolute;
   white-space: pre;
-  color: rgba(18, 16, 14, 0.92);
   font-family: 'Noto Serif KR', serif;
-  font-weight: 500;
   letter-spacing: -0.01em;
   text-rendering: geometricPrecision;
   z-index: 5;
@@ -238,6 +217,49 @@ textarea:focus {
   margin-top: 18px;
 }
 
+.hint {
+  font-size: 11px;
+  color: #6d665e;
+  margin: 0 0 8px;
+  line-height: 1.9;
+}
+.hint code {
+  background: #eee5d9;
+  padding: 1px 5px;
+  border-radius: 5px;
+  color: #2c2823;
+  font-size: 11px;
+}
+
+.colors {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.color-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  color: #514b44;
+}
+.color-field input[type='color'] {
+  width: 34px;
+  height: 28px;
+  border: 1px solid rgba(21, 18, 15, 0.16);
+  border-radius: 8px;
+  background: none;
+  padding: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.color-field code {
+  font-size: 10px;
+  color: #9a9186;
+}
+
 /* ---- Layer list ---- */
 .layer-list {
   list-style: none;
@@ -262,6 +284,7 @@ textarea:focus {
   object-fit: contain;
   border-radius: 7px;
   background: repeating-conic-gradient(#e7ddcf 0% 25%, #f4ecdf 0% 50%) 50% / 10px 10px;
+  display: block;
 }
 .layer-name {
   font-size: 12px;
