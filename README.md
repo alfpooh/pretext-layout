@@ -22,6 +22,15 @@ npm run build    # 타입체크 + 프로덕션 빌드
 npm run preview  # 빌드 결과 미리보기
 ```
 
+## 두 개의 진입점
+
+| 경로 | 내용 |
+| --- | --- |
+| `/` (`index.html`) | GA4/GTM 계측이 포함된 **정적 아티클** — `article.html`을 그대로 서빙합니다. |
+| `/app.html` | 레이아웃을 생성·수정·export 하는 **React 저작 도구**. |
+
+`article.html`은 저작 도구의 "HTML 내보내기" 결과에 추적 태그를 붙인 self-contained 파일이라, Vite의 HTML 파이프라인(parse5 파싱·HMR 주입)을 거치지 않고 [vite.config.ts](vite.config.ts)의 작은 플러그인이 **원문 그대로** `/`에 서빙하고 빌드 시 `dist/index.html`로 복사합니다. 저작 도구는 `app.html`을 진입점으로 빌드되어 `dist/app.html`이 됩니다. 새 아티클을 배포하려면 `/app.html`에서 export한 HTML로 `article.html`을 교체하세요.
+
 ## 파이프라인
 
 ```
